@@ -657,6 +657,110 @@ TEST_CASE("rcRasterizeTriangle")
 	}
 }
 
+TEST_CASE("rcRasterizeTriangle overlapping bb but non-overlapping triangle")
+{
+	// This is a minimal repro case for the issue fixed in PR #476 (https://github.com/recastnavigation/recastnavigation/pull/476)
+    rcContext ctx;
+
+	// create a heightfield
+    float cellSize = 1;
+    float cellHeight = 1;
+    int width = 10;
+    int height = 10;
+    float bmin[] = { 0, 0, 0 };
+    float bmax[] = { 10, 10, 10 };
+    rcHeightfield heightfield;
+    REQUIRE(rcCreateHeightfield(&ctx, heightfield, width, height, bmin, bmax, cellSize, cellHeight));
+
+	// rasterize a triangle outside of the heightfield.
+    unsigned char area = 42;
+    int flagMergeThr = 1;
+    float verts[] =
+	{
+        -10.0, 5.5, -10.0,
+        -10.0, 5.5, 3,
+        3.0, 5.5, -10.0
+    };
+    REQUIRE(rcRasterizeTriangle(&ctx, &verts[0], &verts[3], &verts[6], area, heightfield, flagMergeThr));
+    
+	// ensure that no spans were created
+    for (int x = 0; x < width; ++x)
+	{
+        for (int z = 0; z < height; ++z)
+		{
+            rcSpan* span = heightfield.spans[x + z * heightfield.width];
+			REQUIRE(span == NULL);
+        }
+    }
+}
+
+TEST_CASE("rcRasterizeTriangle smaller than half a voxel size in x")
+{
+	SECTION("Skinny triangle along x axis")
+	{
+		rcContext ctx;
+		float verts[] = {
+			5, 0, 0.005f,
+			5, 0, -0.005f,
+			-5, 0, 0.005f,
+
+			-5, 0, 0.005f,
+			5, 0, -0.005f,
+			-5, 0, -0.005f,
+		};
+		float bmin[3];
+		float bmax[3];
+		rcCalcBounds(verts, 3, bmin, bmax);
+
+		float cellSize = 1;
+		float cellHeight = 1;
+
+		int width;
+		int height;
+
+		rcCalcGridSize(bmin, bmax, cellSize, &width, &height);
+
+		rcHeightfield solid;
+		REQUIRE(rcCreateHeightfield(&ctx, solid, width, height, bmin, bmax, cellSize, cellHeight));
+
+		unsigned char areas[] = {42, 42};
+		int flagMergeThr = 1;
+		REQUIRE(rcRasterizeTriangles(&ctx, verts, areas, 2, solid, flagMergeThr));
+	}
+	
+	SECTION("Skinny triangle along z axis")
+	{
+		rcContext ctx;
+		float verts[] = {
+			0.005f, 0, 5,
+			-0.005f, 0, 5,
+			0.005f, 0, -5,
+
+			0.005f, 0, -5,
+			-0.005f, 0, 5,
+			-0.005f, 0, -5
+		};
+		float bmin[3];
+		float bmax[3];
+		rcCalcBounds(verts, 3, bmin, bmax);
+
+		float cellSize = 1;
+		float cellHeight = 1;
+
+		int width;
+		int height;
+
+		rcCalcGridSize(bmin, bmax, cellSize, &width, &height);
+
+		rcHeightfield solid;
+		REQUIRE(rcCreateHeightfield(&ctx, solid, width, height, bmin, bmax, cellSize, cellHeight));
+
+		unsigned char areas[] = {42, 42};
+		int flagMergeThr = 1;
+		REQUIRE(rcRasterizeTriangles(&ctx, verts, areas, 2, solid, flagMergeThr));
+	}
+}
+
 TEST_CASE("rcRasterizeTriangles")
 {
 	rcContext ctx;
